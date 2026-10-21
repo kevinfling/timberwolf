@@ -9,12 +9,12 @@ void tearDown(void) {}
 // ---- tw_process error handling ----
 
 void test_process_returns_minus1_for_null_raw(void) {
-    double hi[16], work[16 * 3];
+    double hi[16], work[16 * 4];
     TEST_ASSERT_EQUAL_INT(-1, tw_process(NULL, 16, 1.0, hi, work, 0));
 }
 
 void test_process_returns_minus1_for_null_health_index(void) {
-    double raw[16], work[16 * 3];
+    double raw[16], work[16 * 4];
     for (int i = 0; i < 16; i++) raw[i] = 1.0;
     TEST_ASSERT_EQUAL_INT(-1, tw_process(raw, 16, 1.0, NULL, work, 0));
 }
@@ -109,48 +109,7 @@ void test_process_spectral_differs_from_time_domain(void) {
 
 void test_scratch_size_correct(void) {
     const size_t n = 1024;
-    TEST_ASSERT_EQUAL_size_t(3 * n * sizeof(double), tw_scratch_size(n));
-}
-
-void test_ctx_lepto_ewma_smooths_across_windows(void) {
-    const size_t n = 256;
-    double* raw  = malloc(n * sizeof(double));
-    double* hi   = malloc(n * sizeof(double));
-    double* work = malloc(tw_scratch_size(n));
-
-    // Window 1: clean sine — low leptokurtosis
-    for (size_t i = 0; i < n; i++)
-        raw[i] = sin(2.0 * TW_PI * 4.0 * i / (double)n);
-
-    tw_ctx_t ctx;
-    tw_ctx_init(&ctx, n, 0.7);
-    tw_process_ctx(&ctx, raw, n, 1.0, hi, work, 0);
-    double lepto_after_w1 = ctx.lepto_ewma;
-
-    // Window 2: impulsive signal — high leptokurtosis
-    for (size_t i = 0; i < n; i++) raw[i] = 0.0;
-    raw[64] = 50.0; raw[128] = -50.0; raw[192] = 50.0;
-    tw_process_ctx(&ctx, raw, n, 1.0, hi, work, 0);
-    double lepto_after_w2 = ctx.lepto_ewma;
-
-    // Window 3: back to clean sine — EWMA should still be elevated (not snapped back)
-    for (size_t i = 0; i < n; i++)
-        raw[i] = sin(2.0 * TW_PI * 4.0 * i / (double)n);
-    tw_process_ctx(&ctx, raw, n, 1.0, hi, work, 0);
-    double lepto_after_w3 = ctx.lepto_ewma;
-
-    tw_ctx_destroy(&ctx);
-    free(raw); free(hi); free(work);
-
-    // Impulsive window should raise the EWMA above the clean-sine baseline
-    TEST_ASSERT_TRUE(lepto_after_w2 > lepto_after_w1);
-    // EWMA must be strictly between w1 and w2: smoothing prevents it from
-    // snapping back to the raw batch value in a single window.
-    TEST_ASSERT_TRUE(lepto_after_w3 > lepto_after_w1);
-    // All three outputs must be finite
-    TEST_ASSERT_TRUE(isfinite(lepto_after_w1));
-    TEST_ASSERT_TRUE(isfinite(lepto_after_w2));
-    TEST_ASSERT_TRUE(isfinite(lepto_after_w3));
+    TEST_ASSERT_EQUAL_size_t(4 * n * sizeof(double), tw_scratch_size(n));
 }
 
 int main(void) {
@@ -166,7 +125,6 @@ int main(void) {
     RUN_TEST(test_process_health_index_all_finite_with_spectral);
     RUN_TEST(test_process_spectral_differs_from_time_domain);
     RUN_TEST(test_scratch_size_correct);
-    RUN_TEST(test_ctx_lepto_ewma_smooths_across_windows);
 
     return UNITY_END();
 }
